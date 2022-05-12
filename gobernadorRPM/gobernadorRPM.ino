@@ -13,7 +13,7 @@
 #include <EEPROM.h>
 #include <avr/wdt.h> //libreria para el manejo de whatch dog timer recordar que hay que actualizar el bootloader del arduino nano
 //LiquidCrystal_I2C             lcd(0x27, 2, 1, 0, 4, 5, 6, 7);
-LiquidCrystal_I2C             lcd(39,16,2); //0x27 equals to 39
+LiquidCrystal_I2C             lcd(0x27,16,2); //0x27 equals to 39
 
 
 //#include <OneWire.h>                 //Se importan las libreríaspara leer el sensor de temperatura digital
@@ -36,12 +36,12 @@ int b = A6;//PIN analogico DONDE ESTAN LOS BOTONES
 
 
 //DIGITALES
-byte na0 = 2;               //pin no utilizado
+byte na0 = 2;               //pin no utilizado SERA PARA LA IMPRESORA
 byte bobina = 3;            //(ESTE PIN CUANDO NO HAY PULSO DE BOBINA ESTA EN 1 GRACIAS A LA RESISTENCIA DE 10K, CUANDO ENTRA PULSO 12V AL TRANSISTOR ESTE CONDUCE Y MANDA A 0 EL PIN 2, SIGNIFICA QUE CUANDO HAY PULSO EN LA BOBINA EL PIN PASA DE 5V A 0 CONTAR LAS INTERRUPCIONES EN FALLING)
 byte pingps = 4;              //(CUANDO NO HAY BLOQUEO GPS LA ENTRADA ESTA EN 1, CUANDO HAY BLOQUEO EL GPS MANDA TIERRA Y LA ENTRADA ES 0) CABLE AMARILLO GPS
 byte pinCajaSeguridad = 5;               //pin donde esta el mosfet para abrir la caja de seguridad, inicializar como salida y en 0. al enviar 1 se activa el mosfet y abre la caja de seguridad
 byte ventilador = 6;        //pin donde estar conectado el mosfet para activar el ventilador cuando se active la alarma temperatura (INICIALIZAR COMO 0 CON 1 ENCENDEMOS EL VENTILADOR Y CON 0 LO APAGAMOS)
-byte pinsirena = 7;           //Pin donde esta conectado el cable naranja del gps (CUANDO NO HAY PULSO GPS LA ENTRADA DE ARDUINO ESTA EN 1 CUANDO ENTRA UN PULSO CONDUCE EL TRANCISTOR QUE ENVIA LA ENTRADA A 0)
+byte pinWDT = 7;           //Pin donde esta conectado el cable naranja del gps (CUANDO NO HAY PULSO GPS LA ENTRADA DE ARDUINO ESTA EN 1 CUANDO ENTRA UN PULSO CONDUCE EL TRANCISTOR QUE ENVIA LA ENTRADA A 0)
 byte pinGasGasolina = 8;    //pin donde se conectan las electrovalvulas para reconocer si el vehiculo esta ne modo gasolina o modo gas (CUANDO EL COCHE VA A GASOLINA ENTRA UN 0 EN EL CIRCUITO, LA ENTRADA DE ARDUINO ESTA EN 5V POR PULLUP, CUANDO CAMBIA A GLP ENTRA 1 EN EL CIRCUITO QUE HACE CONDUCIR EL TRANSISTOR ENVIANDO A LA ENTRADA DE ARDUINO UN 0)
 byte pinswich = 9;            //(CUANDO EL SWICH ESTA APAGADO EL PIN ESTA EN 1 CUANDO SE ENCIENDE EL SWICH, EL PIN CAMBIA A 0)
 byte pinluces = 10;           //pin donde entra la señal digital luces (CUANDO LAS LUCES ESTAN APAGADAS EL PIN ESTA EN 1 CUANDO ESTAN ENCENDIDAS CAMBIA A 0)
@@ -49,7 +49,7 @@ byte buzzer = 11;             //el pin 11 tiene el buzzer (EL BUZER SE ACTIVA CO
 byte bomba = 12;              //el pin 12 donde esta la etapa de potencia para activar LA BOBINA DEL MOTOR (CON 1 ENCENDEMOS EL MOTOR Y CON 0 LO APAGAMOS)
 byte ahorroEnergia = 13;      //es el pin utilizado para activar el mosfet que entrega la energia a todo el sistema (CON 1 ACTIVAMOS EL MOSFET Y CON 0 LO APAGAMOS) este esta integrado apartir del sistema 10.1, el mosfet corta la energia tanto del gps y tanto del sistema, el plan es que una vez que el swich del carro se mueva a on, activara el mosfet y se encendera tanto el gps como el gobernador, al encenderce el gobernador envia 1 por el pin 13 y activa el mosfet, en este momento aunque el swich del carro se apague el sistema seguira encendido, ya de ahi vasta programar el sistema para que despues de un determinado tiempo con el swich apagado, cambie el pin 13 a 0 y por lo tanto el capacitor antes del mosfet, hasta que se descarge y corte la eneria delk mosfet apagando todo el sistema en tehoria xD
 
-
+bool cambioEstadoWDT = false;
 
 
 
@@ -296,7 +296,8 @@ void setup() {
     pinMode(pingps, INPUT_PULLUP);              //CONECCION CORTE GPS CON EL PULLUP SIMPLEMENTE EL PIN SIEMPRE MANDA 1 CUANOD EL GPS NO ESTA A TIERRA O ESTA DESBLOQUEADO  Y CUANDO EL GPS MANDA A TIERRA SE PONE A 0
     pinMode(pinCajaSeguridad, OUTPUT);
     pinMode(ventilador, OUTPUT);
-    pinMode(pinsirena, INPUT_PULLUP);           //SIRENA 1 SIN PULSO 0 CON PULSO
+    pinMode(pinWDT, OUTPUT);           //SIRENA 1 SIN PULSO 0 CON PULSO
+    resetWDTexterno();
     pinMode(pinGasGasolina, INPUT_PULLUP);                 //PIN QUE RECIBE DEL TRANSISTOR 1 CUANDO ESTA EN MODO GASOLINA Y 0 CUANDO ESTA EN MODO GAS, CUANDO LA ELECTROVALVULA LE MANDA 12V A LA BASE DEL TRANSISTOR SE PONE EN 0 EL COLECTOR  
     pinMode(pinswich, INPUT_PULLUP);            // lectura de la posicion del swich
     pinMode(pinluces, INPUT_PULLUP);
@@ -339,26 +340,30 @@ void setup() {
 
 
 
-    lcd.begin(16, 2);
+    lcd.init();
     //lcd.setBacklightPin(3, POSITIVE);
     lcd.setBacklight(HIGH);//iniciamos el LCD.
     attachInterrupt(digitalPinToInterrupt(bobina), funcionInterrupcion, FALLING);
-    wdt_enable(WDTO_4S);//activamos el watch dog timer
+    //wdt_enable(WDTO_4S);//activamos el watch dog timer
 
+
+    resetWDTexterno();
+    delay(500);
 
 }
 
 void loop() {
 
+    
 
-
-    wdt_reset(); //reseteamos el watch dog con cada loop
+      //reseteamos el watch dog con cada loop
+    resetWDTexterno();
 
     swich = digitalRead(pinswich);
     gps = digitalRead(pingps);
 
 
-    if (ignicion == 1 && millis() > 10800000) { asm("jmp 0x0000"); }//linea para saltar a la direccion de la memoria donde se encuentra la funcion para reiniciar arduino
+    //if (ignicion == 1 && millis() > 10800000) { asm("jmp 0x0000"); }//linea para saltar a la direccion de la memoria donde se encuentra la funcion para reiniciar arduino
     //reiniciamos arduino cada dia en la noche una ves que el vehiculo esta apagado y tarda 3 horas asi formula 3H * 60M *60S *1000=10800000millis
 
 
@@ -551,12 +556,12 @@ void loop() {
 
     if (millis() > Tresetpantalla + 15000) {
         if (estadopantalla == 0) {
-            lcd.begin(16, 2);
+            lcd.init();
             lcd.setBacklight(HIGH);
             Tresetpantalla = millis();
         }
         if (estadopantalla == 1) {
-            lcd.begin(16, 2);
+            lcd.init();
             lcd.setBacklight(LOW);
             Tresetpantalla = millis();
         }
@@ -771,25 +776,25 @@ void loop() {
        //lo que haremos sera utilizar la entrada del pin sirena del gps, consultaremos continuamente si el pin no ha cambiado de 1 (estado sin pulso) a 0 (hay pulso)
        //es decir cuando al gps se le envie el mensaje de "disarm" este emitira por su sirena un pulso doble, el sistema lo captara y entonces debera detonar
        //una alarma que le indique al agente que se comunique a la empresa. Despues de un tiempo definido ya sean 30 segundos el mensaje debera desaparecer solo.
-    if (digitalRead(pinsirena) == 0) {
-        alarmaComunicate = 1;
-        tiempoAlarmaComunicate = millis();
-        A = 1;
-    }
-    else {
-        if (millis() > tiempoAlarmaComunicate + 30000 && alarmaComunicate == 1) {
-            alarmaComunicate = 0;
+   // if (digitalRead(pinWDT) == 0) {
+        //alarmaComunicate = 1;
+        //tiempoAlarmaComunicate = millis();
+      //  A = 1;
+    //}
+   // else {
+        //if (millis() > tiempoAlarmaComunicate + 30000 && alarmaComunicate == 1) {
+        //    alarmaComunicate = 0;
 
-        }
-    }
+      //  }
+    //}
 
     //si la alarma comunicate sige activa segimos poniendo 1 en el valor de A porque si no lo que ocurria era que a la primera ves
     //se activava la alarma, pero en el codigo de la pantalla, una ves que muestra una alarma cambia el valor de A = 0
     //con las demas alarmas no hay problema porque por ejemplo las luces siguen encendidas y por lo tanto su codigo sigue mandando A=1
     //pero como esta alarma solo recibe un pulso del gps el cual desaparece.
-    if (alarmaComunicate == 1 && A == 0) {
-        A = 1;
-    }
+    //if (alarmaComunicate == 1 && A == 0) {
+    //    A = 1;
+    //}
 
 
 
@@ -1632,8 +1637,9 @@ bool bloqueoDeMotorRapidoFernan() {
             tr = millis();
             lcd.setCursor(0, 0);lcd.print("tiene " + String(tiemporegresivo) + "seg. ");
             lcd.setCursor(0, 1);lcd.print(codigoIngresado);
-            wdt_reset();//reiniciamos el wach dog
+             //reiniciamos el wach dog
             // hacemos que cada que pase un segundo redusca 1 valor a tiemporegresivo
+            resetWDTexterno();
         }
 
         if (tiemporegresivo == 0) {
@@ -1761,8 +1767,9 @@ bool ingresaAlMenu() {
             tr = millis();
             lcd.setCursor(0, 0);lcd.print("COD:" + String(randNumber) + " " + String(tiemporegresivo) + "seg.");
             lcd.setCursor(0, 1);lcd.print(codigoIngresado);
-            wdt_reset();//reiniciamos el wach dog
+             //reiniciamos el wach dog
             // hacemos que cada que pase un segundo redusca 1 valor a tiemporegresivo
+            resetWDTexterno();
         }
 
         if (tiemporegresivo == 0) {
@@ -1772,6 +1779,7 @@ bool ingresaAlMenu() {
                 lcd.setCursor(0, 1);
                 lcd.print("BIENVENIDO");
                 AUDIO_EXITO();
+                resetWDTexterno();
                 delay(1000);
                 return true;
             }
@@ -1781,7 +1789,9 @@ bool ingresaAlMenu() {
                 lcd.setCursor(0, 1);lcd.print("Abriendo Caja");
                 digitalWrite(pinCajaSeguridad, HIGH);
                 AUDIO_EXITO();
-                delay(2000);
+                resetWDTexterno();
+                delay(700);
+                resetWDTexterno();
                 digitalWrite(pinCajaSeguridad, LOW);
                 return false;
 
@@ -1794,7 +1804,8 @@ bool ingresaAlMenu() {
                 lcd.setCursor(0, 1);
                 lcd.print("incorrecto");
                 AUDIO_ERROR();
-                delay(1000);
+                resetWDTexterno();
+                delay(800);
                 return false;
 
             }
@@ -1889,7 +1900,8 @@ bool menuPrincipal() {
             //opcion 1 
         case 1:
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("1.RPM MAXIMAS"));
                 actualizarimagen = millis();
@@ -1962,7 +1974,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones 
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("LIMITE: " + String(corterpm) + "rpm");
                     lcd.setCursor(0, 1);
@@ -1983,7 +1996,7 @@ bool menuPrincipal() {
             //OPCION DE MENU 2
             /*case 2:
                 if(millis()>actualizarimagen+500){//frecuencia con la que se actualiza la imagen del meno de opciones
-                    wdt_reset();
+                     
                     lcd.clear();
                     lcd.print(F("2.Calibrar RPM"));
                     actualizarimagen=millis();
@@ -2051,7 +2064,7 @@ bool menuPrincipal() {
 
                     //MOSTRAR EN LA PANTALLA
                     if(millis()>actualizarimagen+500){//frecuencia con la que se actualiza la imagen del menu de opciones
-                        wdt_reset();
+                         
                         lcd.clear();
                         lcd.print("RPM:"+String(rpm,0));
                         lcd.setCursor(0,1);
@@ -2071,7 +2084,8 @@ bool menuPrincipal() {
             //opcion menu 3
         case 2:
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("2.ALARMA DE"));
                 lcd.setCursor(0, 1);
@@ -2145,7 +2159,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.setCursor(1, 0);
                     lcd.print("Alarma a: " + String(limiteT) + "C");
@@ -2163,7 +2178,8 @@ bool menuPrincipal() {
            // OPCION MENU 4 CORTE TEMPERATURA
         case 3:
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("3.CORTE DE"));
                 lcd.setCursor(0, 1);
@@ -2239,7 +2255,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.setCursor(1, 0);
                     lcd.print("Corte a: " + String(limiteTC) + "C");
@@ -2259,7 +2276,8 @@ bool menuPrincipal() {
             //OPCION MENU 5 ajusteT
         case 4:
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("4.CALIBRAR LA"));
                 lcd.setCursor(0, 1);
@@ -2326,7 +2344,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     temperaturaD2 = ((1023 - analogRead(pinT)) / ajusteT);
                     lcd.clear();
                     lcd.print("Temp:" + String(temperaturaD2) + "C ");
@@ -2346,7 +2365,8 @@ bool menuPrincipal() {
        //OPCION MENU 6 ajusteBG
         case 5://ajuste de la variable ajusteG es un float usado para calibrar la lectura de voltaje de las baterias, escribimos en 15, la siguiente direccion de memoria seria 19
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("5.CALIBRAR EL"));
                 lcd.setCursor(0, 1);
@@ -2410,7 +2430,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     bgD = analogRead(pinbg) / ajusteBG;
                     lcd.clear();
                     lcd.print("Voltaje:" + String(bgD) + "v ");
@@ -2426,7 +2447,8 @@ bool menuPrincipal() {
         case 6://ajuste de la variable ajusteG es un float usado para calibrar la lectura de voltaje de las baterias, escribimos en 16, la siguiente direccion de memoria seria 20
 
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("6.ALARMA DE USO"));
                 lcd.setCursor(0, 1);
@@ -2487,7 +2509,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("La Alarma esta:");
                     lcd.setCursor(0, 1);
@@ -2513,7 +2536,8 @@ bool menuPrincipal() {
         case 7://Ajuste del tiempo de ahorro de energia
 
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("7.AHORRO"));
                 lcd.setCursor(0, 1);
@@ -2585,7 +2609,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("Esperar para");
                     lcd.setCursor(0, 1);
@@ -2605,7 +2630,8 @@ bool menuPrincipal() {
         case 8://Ajuste del limite sensor luz
 
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("8.Sensor Luz"));
                 lcd.setCursor(0, 1);
@@ -2679,7 +2705,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("Limite luz: " + String(limiteInferiorSensorLuz));
                     lcd.setCursor(0, 1);
@@ -2703,7 +2730,8 @@ bool menuPrincipal() {
         case 9://ajuste de la variable ajusteG es un float usado para calibrar la lectura de voltaje de las baterias, escribimos en 16, la siguiente direccion de memoria seria 20
 
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("9.ALARMAS VOLTA"));
                 lcd.setCursor(0, 1);
@@ -2764,7 +2792,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("Alarmas estan:");
                     lcd.setCursor(0, 1);
@@ -2789,7 +2818,8 @@ bool menuPrincipal() {
 
         case 10:
             if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                wdt_reset();
+                 
+                resetWDTexterno();
                 lcd.clear();
                 lcd.print(F("10.RESTABLECER"));
                 lcd.setCursor(0, 1);
@@ -2866,7 +2896,8 @@ bool menuPrincipal() {
 
                  //MOSTRAR EN LA PANTALLA 
                 if (millis() > actualizarimagen + 500) {//frecuencia con la que se actualiza la imagen del menu de opciones
-                    wdt_reset();
+                     
+                    resetWDTexterno();
                     lcd.clear();
                     lcd.print("precione ACEPTAR");
                     lcd.setCursor(0, 1);
@@ -2881,7 +2912,7 @@ bool menuPrincipal() {
             //______________________________________________________________________________
         case 11: //mostramos la version del software y reiniciamos en automatico pasados 4 segundos
             if (millis() > actualizarimagen + 250) {//frecuencia con la que se actualiza la imagen del meno de opciones
-                //wdt_reset(); 
+                //  
                 lcd.clear();
                 lcd.print("11.-soft: " + VERSION_SOFTEARE);
 
@@ -2919,7 +2950,8 @@ bool abreCajaFuerte() {
 
     while (swich == 0) {
         swich = digitalRead(pinswich);
-        wdt_reset();
+         
+        resetWDTexterno();
 
 
         if (millis() > tiempoEntreClics + 500) {
@@ -2983,8 +3015,10 @@ bool abreCajaFuerte() {
         lcd.clear();
         lcd.setCursor(0, 1);lcd.print("Abriendo Caja");
         digitalWrite(pinCajaSeguridad, HIGH);
+        resetWDTexterno();
         AUDIO_EXITO();
-        delay(2000);
+        delay(800);
+        resetWDTexterno();
         digitalWrite(pinCajaSeguridad, LOW);
     }
     else {
@@ -2992,7 +3026,7 @@ bool abreCajaFuerte() {
         lcd.setCursor(0, 0);lcd.print("Codigo");
         lcd.setCursor(0, 1);lcd.print("Incorrecto");
         AUDIO_ERROR();
-        delay(1000);
+        delay(800);
 
     }
 
@@ -3250,6 +3284,16 @@ int BOTONES() {
 }
 
 
+void resetWDTexterno() {
+   if (cambioEstadoWDT) {
+      digitalWrite(pinWDT, LOW);
+      cambioEstadoWDT = false;
+   }
+   else {
+      digitalWrite(pinWDT, HIGH);
+      cambioEstadoWDT = true;
+    }
+}
 
 
 
@@ -3317,7 +3361,8 @@ void funcionLimpiezaDeRelay() {
             //aqui activamos la limpieza del relevador de bomba
             contadorlimp = 0;
             while (contadorlimp <= numeroDeVibraciones) {
-                wdt_reset();
+                 
+                resetWDTexterno();
                 digitalWrite(bomba, HIGH);
                 delay(tiempoVibracion);
                 digitalWrite(bomba, LOW);
@@ -3331,7 +3376,8 @@ void funcionLimpiezaDeRelay() {
 
             contadorlimp = 0;
             while (contadorlimp <= numeroDeVibraciones) {
-                wdt_reset();
+                 
+                resetWDTexterno();
                 digitalWrite(ventilador, HIGH);
                 delay(tiempoVibracion);
                 digitalWrite(ventilador, LOW);
@@ -3356,7 +3402,7 @@ void funcionLimpiezaDeRelay() {
     lcd.print("Limpieza ");
     lcd.setCursor(0, 1);
     lcd.print("Finalizada");
-    delay(1000);
+    delay(800);
 
 
 }
@@ -3364,6 +3410,7 @@ void funcionLimpiezaDeRelay() {
 
 //AUDIOS_________________________________________________________________
 void AUDIO_BEEP() {
+    resetWDTexterno();
     digitalWrite(buzzer, HIGH);
     delay(20);
     digitalWrite(buzzer, LOW);
@@ -3371,6 +3418,7 @@ void AUDIO_BEEP() {
 
 void AUDIO_ERROR() {
     for (int i = 0;i < 2;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(30);
         digitalWrite(buzzer, LOW);
@@ -3382,6 +3430,7 @@ void AUDIO_ERROR() {
 
 void AUDIO_ALARMA() {
     for (int i = 0;i < 5;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(200);
         digitalWrite(buzzer, LOW);
@@ -3392,6 +3441,7 @@ void AUDIO_ALARMA() {
 
 void AUDIO_LIGERO() {
     for (int i = 0;i < 3;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(100);
         digitalWrite(buzzer, LOW);
@@ -3403,6 +3453,7 @@ void AUDIO_LIGERO() {
 
 void AUDIO_MEDIO() {
     for (int i = 0;i < 4;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(150);
         digitalWrite(buzzer, LOW);
@@ -3413,6 +3464,7 @@ void AUDIO_MEDIO() {
 
 void AUDIO_GRAVE() {
     for (int i = 0;i < 3;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(400);
         digitalWrite(buzzer, LOW);
@@ -3427,6 +3479,7 @@ void AUDIO_EXITO() {
     digitalWrite(buzzer, LOW);
     delay(30);
     for (int i = 0;i < 2;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH);
         delay(80);
         digitalWrite(buzzer, LOW);
@@ -3441,13 +3494,16 @@ void AUDIO_EXITO() {
 void AUDIO_GUARDAR() {
     lcd.clear();
     lcd.print(F("Guardado Exitoso"));
+    
     for (int i = 0;i < 6;i++) {
+        resetWDTexterno();
         digitalWrite(buzzer, HIGH); //si se escribio algo en la memoria activa el buzzer hace un tono con el buzzer
         delay(50);
         digitalWrite(buzzer, LOW);
         delay(30);
     }
-    delay(2000);
+    delay(800);
+
 }
 
 
