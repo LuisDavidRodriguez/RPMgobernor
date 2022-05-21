@@ -226,7 +226,7 @@ const byte BOTON_3_ARRIBA = 50;
 
 
 
-const String VERSION_SOFTEARE = "10.8";
+const String VERSION_SOFTEARE = "10.9";
 //version 10.1
 // incluye la funcion de apretura de caja fuerte, se activa con el swich abierto sin encender el motor precionando el boton de salir, una ves ingresado el codig variable
 //se debe de cerrar el swich para que el sistema abra la caja fuerte si la contraseña fue correcta
@@ -285,6 +285,16 @@ const String VERSION_SOFTEARE = "10.8";
 //bajamos las revoluciones minimas del motor para que reconosca ignicion a 10 en la 10.8 no notamos que tambien habia que cambiar
 //el renglon de abajo que cambia ignicion a 1 cuando las rpm son menores a 10, lo cambiamos en la 10.8
 
+/*
+Version 10.9
+i'm going to changee in this basic version, the shortcut for fan-bridging, the problem is that the employees abuse on this feature
+the harness doesn't support too much current more than 10A and more over for more than few minutes, when the employees abuses this
+the harness undergo trhough too much corrent for protractred periods of time, hence, the harness melt and produce some other issues
+in it.
+Therefore i'm going to cancel the shortcut fan-bridging
+
+*/
+
 
 
 
@@ -339,7 +349,7 @@ void setup() {
 
 
 
-    lcd.begin(16, 2);
+    lcd.init();
     //lcd.setBacklightPin(3, POSITIVE);
     lcd.setBacklight(HIGH);//iniciamos el LCD.
     attachInterrupt(digitalPinToInterrupt(bobina), funcionInterrupcion, FALLING);
@@ -351,7 +361,7 @@ void setup() {
 void loop() {
 
 
-
+    
     wdt_reset(); //reseteamos el watch dog con cada loop
 
     swich = digitalRead(pinswich);
@@ -551,12 +561,12 @@ void loop() {
 
     if (millis() > Tresetpantalla + 15000) {
         if (estadopantalla == 0) {
-            lcd.begin(16, 2);
+            lcd.init();
             lcd.setBacklight(HIGH);
             Tresetpantalla = millis();
         }
         if (estadopantalla == 1) {
-            lcd.begin(16, 2);
+            lcd.init();
             lcd.setBacklight(LOW);
             Tresetpantalla = millis();
         }
@@ -1337,7 +1347,7 @@ void loop() {
 
 
     //ACCEDER A ACTIVAR PUENTE DE VENTILADOR     
-    if (BOTONES() == BOTON_3_ARRIBA) {
+   /* if (BOTONES() == BOTON_3_ARRIBA) {
         if (millis() > retardo + 1000) {
             retardo = millis();
             conteoPuenteVentilador++;
@@ -1348,7 +1358,7 @@ void loop() {
         conteoPuenteVentilador = 0;
     } //si soltamos el boton entrar o no esta precionado conteo se reinicia a 0 
 
-
+    
     if (conteoPuenteVentilador >= 7) { //cuando el conteo del menu llege a esta cifra ingresamos al menu
 
         lcd.clear();
@@ -1371,7 +1381,7 @@ void loop() {
         delay(500);
 
     }
-
+    */
 
 
 
