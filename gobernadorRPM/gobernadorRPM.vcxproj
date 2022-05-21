@@ -114,7 +114,22 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Attach.h" />
+    <ClInclude Include="Audio.h" />
+    <ClInclude Include="ExternalWDT.h" />
+    <ClInclude Include="ManagerEeprom.h" />
+    <ClInclude Include="MonitorRpm.h" />
+    <ClInclude Include="PinDesignation.h" />
+    <ClInclude Include="Screen.h" />
     <ClInclude Include="__vm\.gobernadorRPM.vsarduino.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Attach.cpp" />
+    <ClCompile Include="Audio.cpp" />
+    <ClCompile Include="ExternalWDT.cpp" />
+    <ClCompile Include="ManagerEeprom.cpp" />
+    <ClCompile Include="MonitorRpm.cpp" />
+    <ClCompile Include="Screen.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
